@@ -3,8 +3,8 @@ github.com/andybalholm/brotli v1.0.2/go.mod h1:loMXtMfwqflxFJPmdbJO0a3KNoPuLBgiu
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/dgrr/websocket v0.0.4 h1:TqPSSj23MqtZ6dcLd0yqSNCWaikTx+f6jy8guLJAo14=
-github.com/dgrr/websocket v0.0.4/go.mod h1:d30hG8q3dQuz6eSwROXzIodSvPTNi52j1VvxrK7RWXc=
+github.com/dgrr/websocket v0.0.5 h1:gYxn5sjv7P1LJzqEfuJNp6VHSBO4DmiXQ3AkePu7d3c=
+github.com/dgrr/websocket v0.0.5/go.mod h1:d30hG8q3dQuz6eSwROXzIodSvPTNi52j1VvxrK7RWXc=
 github.com/fasthttp/router v1.4.0 h1:sWMk0q7M6Qj73eLIolh/934mKTNZIWDrEPDhZUF1pAg=
 github.com/fasthttp/router v1.4.0/go.mod h1:uTM3xaLINfEk/uqId8rv8tzwr47+HZuxopzUWfwD4qg=
 github.com/gin-contrib/sse v0.1.0 h1:Y/yl/+YNO8GZSjAhjMsSuLt29uWRFHdHYUb5lYOV9qE=
