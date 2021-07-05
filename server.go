@@ -60,11 +60,6 @@ type Server struct {
 	once sync.Once
 }
 
-type serverClose struct {
-	c   *Conn
-	err error
-}
-
 func (s *Server) initServer() {
 	if s.frHandler != nil {
 		return
@@ -302,16 +297,16 @@ func (s *Server) handleControl(c *Conn, fr *Frame) {
 }
 
 func (s *Server) handlePing(c *Conn, data []byte) {
+	if s.pingHandler != nil {
+		s.pingHandler(c, data)
+	}
+
 	pong := AcquireFrame()
 	pong.SetCode(CodePong)
 	pong.SetPayload(data)
 	pong.SetFin()
 
 	c.WriteFrame(pong)
-
-	if s.pingHandler != nil {
-		s.pingHandler(c, data)
-	}
 }
 
 func (s *Server) handlePong(c *Conn, data []byte) {

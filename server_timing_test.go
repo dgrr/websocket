@@ -153,21 +153,10 @@ func buildUpgrade() (s []byte) {
 }
 
 func benchmarkFastServer(b *testing.B, clients, count int) {
+	ws := Server{}
+
 	s := fasthttp.Server{
-		Handler: Upgrade(func(conn *Conn) {
-			var err error
-			var bf []byte
-			for {
-				_, bf, err = conn.ReadMessage(bf)
-				if err != nil {
-					if err == io.EOF {
-						break
-					}
-					panic(err)
-				}
-			}
-			conn.Close()
-		}),
+		Handler: ws.Upgrade,
 	}
 	ch := make(chan struct{}, 1)
 	ln := newFakeListener(b.N, clients, count, buildUpgrade())

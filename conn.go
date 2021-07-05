@@ -3,6 +3,7 @@ package websocket
 import (
 	"bufio"
 	"github.com/valyala/bytebufferpool"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -96,7 +97,7 @@ func (c *Conn) reset(conn net.Conn) {
 
 func (c *Conn) readLoop() {
 	defer c.wg.Done()
-	defer c.Close()
+	defer c.close()
 
 	for {
 		fr := AcquireFrame()
@@ -201,8 +202,32 @@ func (c *Conn) WriteFrame(fr *Frame) {
 }
 
 func (c *Conn) Close() error {
+	fr := AcquireFrame()
+	fr.SetClose()
+	fr.SetStatus(StatusNone)
+	fr.SetFin()
+
+	c.WriteFrame(fr)
+
+	return nil
+}
+
+func (c *Conn) CloseDetail(status StatusCode, reason string) {
+	fr := AcquireFrame()
+	fr.SetClose()
+	fr.SetStatus(status)
+	fr.SetFin()
+	io.WriteString(fr, reason)
+
+	c.WriteFrame(fr)
+
+	return
+}
+
+func (c *Conn) close() error {
 	select {
 	case <-c.closer:
+		c.Close()
 	default:
 		return nil
 	}

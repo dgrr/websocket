@@ -6,14 +6,88 @@ Checkout [examples](https://github.com/dgrr/websocket/blob/master/examples) to i
 
 # Why another WebSocket package?
 
-Other WebSocket packages don't allow concurrent Read/Write operations
-and does not provide low level access to WebSocket packet crafting.
+Other WebSocket packages don't allow concurrent Read/Write operations on servers
+and they do not provide low level access to WebSocket packet crafting.
+Those WebSocket packages try to emulate the Golang API by implementing
+io.Reader and io.Writer interfaces on their connections. io.Writer might be a
+good idea to use it, but not io.Reader, given that WebSocket is an async protocol
+by nature (all protocols are (?)).
+
+Sometimes, WebSocket servers are just cumbersome when we want to handle a lot of
+clients in an async manner. For example, in other WebSocket packages to broadcast
+a message generated internally we'll need to do the following:
+
+```go
+type MyWebSocketService struct {
+    clients sync.Map
+}
+
+type BlockingConn struct {
+	lck sync.Mutex
+	c websocketPackage.Conn
+}
+
+func (ws *MyWebSocketService) Broadcaster() {
+	for msg := range messageProducerChannel {
+        ws.clients.Range(func(_, v interface{}) bool {
+            c := v.(*BlockingConn)
+            c.lck.Lock() // oh, we need to block, otherwise we can break the program
+            err := c.Write(msg)
+            c.lck.Unlock()
+            
+            if err != nil {
+                // we have an error, what can we do? Log it?
+            	// if the connection has been closed we'll receive that on
+            	// the Read call, so the connection will close automatically.
+            }
+            
+            return true
+        })
+    }
+}
+
+func (ws *MyWebSocketService) Handle(request, response) {
+	c, err := websocketPackage.Upgrade(request, response)
+	if err != nil {
+		// then it's clearly an error! Report back
+    }
+    
+    bc := &BlockingConn{
+        c: c,
+    }   
+    
+	ws.clients.Store(bc, struct{}{})
+    
+	// even though I just want to write, I need to block somehow
+    for {
+    	content, err := bc.Read()
+    	if err != nil {
+            // handle the error
+            break
+        }
+    }
+    
+    ws.clients.Delete(bc)
+}
+```
+
+First, we need to store every client upon connection,
+and whenever we want to send data we need to iterate over a list, and send the message.
+If while, writing we get an error, then we need to handle that client's error
+What if the writing operation is happening at the same time in 2 different coroutines?
+Then we need a sync.Mutex and block until we finish writing.
+
+To solve most of those problems [websocket](https://github.com/dgrr/websocket)
+uses channels and separated coroutines, one for reading and another one for writing.
+By following the [sharing principle](https://golang.org/doc/effective_go#sharing).
+
+> Do not communicate by sharing memory; instead, share memory by communicating.
 
 Following the fasthttp philosophy this library tries to take as much advantage
 of the Golang's multi-threaded model as possible,
 while keeping your code concurrently safe.
 
-To see an example of what this package CAN do that others DONT checkout [the broadcast example](https://github.com/dgrr/websocket/blob/master/examples/broadcast.go).
+To see an example of what this package CAN do that others DONT checkout [the broadcast example](https://github.com/dgrr/websocket/blob/master/examples/broadcast/main.go).
 
 # Server
 
@@ -47,13 +121,11 @@ func OnMessage(c *websocket.Conn, isBinary bool, data []byte) {
 
 ## How can I handle pings?
 
-Pings are automatically handled by the library, but you can get the content of
+Pings are handle automatically by the library, but you can get the content of
 those pings setting the callback using [HandlePing](https://pkg.go.dev/github.com/dgrr/websocket?utm_source=godoc#Server.HandlePing).
 
-For example, let's try to get the round trip time to a client. For that,
-we'll ping the client setting the frame's payload as the current timestamp,
-when we get the PONG frame we can check the current time minus the time sent
-to the client.
+For example, let's try to get the round trip time to a client by using
+the PING frame.
 
 ```go
 package main
@@ -132,7 +204,6 @@ func OnPong(c *websocket.Conn, data []byte) {
 	}
 }
 ```
-
 
 # websocket vs gorilla vs nhooyr vs gobwas
 
