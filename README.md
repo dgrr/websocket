@@ -4,6 +4,12 @@ WebSocket library for [fasthttp](https://github.com/valyala/fasthttp).
 
 Checkout [examples](https://github.com/dgrr/websocket/blob/master/examples) to inspire yourself.
 
+# Install
+
+```bash
+go get github.com/dgrr/websocket
+```
+
 # Why another WebSocket package?
 
 Other WebSocket packages don't allow concurrent Read/Write operations on servers
