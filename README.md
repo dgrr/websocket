@@ -60,7 +60,7 @@ package main
 
 import (
 	"encoding/binary"
-    "log"
+	"log"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -80,21 +80,21 @@ func (rtt *RTTMeasure) Start() {
 }
 
 func (rtt *RTTMeasure) sendPings() {
-    var data [8]byte
-    
-    binary.BigEndian.PutUint64(data[:], uint64(
-    	time.Now().UnixNano()),
-    )
-    
-    // attention! rtt.client is not safe here because it's being accessed
-    // from another goroutine other than the websocket.Server one.
-    // That means, if while we are reading from the map, a client is being
-    // deleted, then Golang may panic here.
-    for _, c := range rtt.clients {
+	var data [8]byte
+
+	binary.BigEndian.PutUint64(data[:], uint64(
+		time.Now().UnixNano()),
+	)
+
+	// attention! rtt.client is not safe here because it's being accessed
+	// from another goroutine other than the websocket.Server one.
+	// That means, if while we are reading from the map, a client is being
+	// deleted, then Golang may panic here.
+	for _, c := range rtt.clients {
 		c.Ping(data[:])
-    }
-    
-    rtt.Start()
+	}
+
+	rtt.Start()
 }
 
 // register a connection when it's open
@@ -106,26 +106,26 @@ func (rtt *RTTMeasure) RegisterConn(c *websocket.Conn) {
 // remove the connection when receiving the close
 func (rtt *RTTMeasure) RemoveConn(c *websocket.Conn, err error) {
 	delete(rtt.clients, c.ID())
-    log.Printf("Client %s disconnected\n", c.RemoteAddr())
+	log.Printf("Client %s disconnected\n", c.RemoteAddr())
 }
 
 func main() {
 	rtt := RTTMeasure{
 		clients: make(map[uint64]*websocket.Conn),
-    }
-	
+	}
+
 	ws := websocket.Server{}
 	ws.HandleOpen(rtt.RegisterConn)
 	ws.HandleClose(rtt.RemoveConn)
 	ws.HandlePong(OnPong)
-	
+
 	// schedule the timer
 	rtt.Start()
 
 	fasthttp.ListenAndServe(":8080", ws.Upgrade)
 }
 
-// handle the pong message
+	// handle the pong message
 func OnPong(c *websocket.Conn, data []byte) {
 	if len(data) == 8 {
 		n := binary.BigEndian.Uint64(data)
