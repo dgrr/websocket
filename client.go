@@ -17,19 +17,22 @@ var (
 	ErrCannotUpgrade = errors.New("cannot upgrade connection")
 )
 
-// MakeClient returns Conn using existing connection.
+// MakeClient returns Conn using an existing connection.
 //
-// url must be complete URL format i.e. http://localhost:8080/ws
+// url must be a complete URL format i.e. http://localhost:8080/ws
 func MakeClient(c net.Conn, url string) (*Client, error) {
 	return client(c, url, nil)
 }
 
-// ClientWithHeaders returns a Conn using existing connection and sending personalized headers.
+// ClientWithHeaders returns a Conn using an existing connection and sending custom headers.
 func ClientWithHeaders(c net.Conn, url string, req *fasthttp.Request) (*Client, error) {
 	return client(c, url, req)
 }
 
 // UpgradeAsClient will upgrade the connection as a client
+//
+// This function should be used with connections that intend to use a
+// plain framing.
 //
 // r can be nil.
 func UpgradeAsClient(c net.Conn, url string, r *fasthttp.Request) error {
@@ -96,7 +99,7 @@ func client(c net.Conn, url string, r *fasthttp.Request) (cl *Client, err error)
 
 // Dial establishes a websocket connection as client.
 //
-// url parameter must follow WebSocket URL format i.e. ws://host:port/path
+// url parameter must follow the WebSocket URL format i.e. ws://host:port/path
 func Dial(url string) (*Client, error) {
 	cnf := &tls.Config{
 		InsecureSkipVerify: false,
@@ -108,7 +111,7 @@ func Dial(url string) (*Client, error) {
 }
 
 // DialTLS establishes a websocket connection as client with the
-// parsed tls.Config. The config will be used if the URL is wss:// like.
+// tls.Config. The config will be used if the URL is wss:// like.
 func DialTLS(url string, cnf *tls.Config) (*Client, error) {
 	return dial(url, cnf, nil)
 }
@@ -168,12 +171,15 @@ func makeRandKey(b []byte) []byte {
 	return b
 }
 
-// Client ...
+// Client represents a client connection.
 type Client struct {
 	c   net.Conn
 	brw *bufio.ReadWriter
 }
 
+// Write writes the content `b` as text.
+//
+// To send binary content use WriteBinary.
 func (c *Client) Write(b []byte) (int, error) {
 	fr := AcquireFrame()
 	defer ReleaseFrame(fr)
@@ -186,7 +192,22 @@ func (c *Client) Write(b []byte) (int, error) {
 	return c.WriteFrame(fr)
 }
 
-// WriteFrame ...
+// WriteBinary writes the content `b` as binary.
+//
+// To send text content use Write.
+func (c *Client) WriteBinary(b []byte) (int, error) {
+	fr := AcquireFrame()
+	defer ReleaseFrame(fr)
+
+	fr.SetFin()
+	fr.SetPayload(b)
+	fr.SetBinary()
+	fr.Mask()
+
+	return c.WriteFrame(fr)
+}
+
+// WriteFrame writes the frame into the WebSocket connection.
 func (c *Client) WriteFrame(fr *Frame) (int, error) {
 	nn, err := fr.WriteTo(c.brw)
 	if err == nil {
@@ -196,7 +217,7 @@ func (c *Client) WriteFrame(fr *Frame) (int, error) {
 	return int(nn), err
 }
 
-// ReadFrame ...
+// ReadFrame reads a frame from the connection.
 func (c *Client) ReadFrame(fr *Frame) (int, error) {
 	n, err := fr.ReadFrom(c.brw)
 	return int(n), err

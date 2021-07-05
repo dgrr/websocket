@@ -11,13 +11,23 @@ import (
 )
 
 type (
-	// OpenHandler ...
+	// OpenHandler handles when a connection is open.
 	OpenHandler    func(c *Conn)
+	// PingHandler handles the data from a ping frame.
 	PingHandler    func(c *Conn, data []byte)
+	// PongHandler receives the data from a pong frame.
 	PongHandler    func(c *Conn, data []byte)
+	// MessageHandler receives the payload content of a data frame
+	// indicating whether the content is binary or not.
 	MessageHandler func(c *Conn, isBinary bool, data []byte)
+	// FrameHandler receives the raw frame. This handler is optional,
+	// if none is specified the server will run a default handler.
+	//
+	// If the user specifies a FrameHandler, then it is going to receive all incoming frames.
 	FrameHandler   func(c *Conn, fr *Frame)
+	// CloseHandler fires when a connection has been closed.
 	CloseHandler   func(c *Conn, err error)
+	// ErrorHandler fires when an unknown error happens.
 	ErrorHandler   func(c *Conn, err error)
 )
 
@@ -91,30 +101,42 @@ func (s *Server) HandleData(msgHandler MessageHandler) {
 	s.msgHandler = msgHandler
 }
 
+// HandleOpen sets a callback for handling opening connections.
 func (s *Server) HandleOpen(openHandler OpenHandler) {
 	s.openHandler = openHandler
 }
 
+// HandleClose sets a callback for handling connection close.
 func (s *Server) HandleClose(closeHandler CloseHandler) {
 	s.closeHandler = closeHandler
 }
 
+// HandlePing sets a callback for handling the data of the ping frames.
+//
+// The server is in charge of replying to the PING frames, thus the client
+// MUST not reply to any control frame.
 func (s *Server) HandlePing(pingHandler PingHandler) {
 	s.pingHandler = pingHandler
 }
 
+// HandlePong sets a callback for handling the data of the pong frames.
 func (s *Server) HandlePong(pongHandler PongHandler) {
 	s.pongHandler = pongHandler
 }
 
+// HandleError ...
 func (s *Server) HandleError(errHandler ErrorHandler) {
 	s.errHandler = errHandler
 }
 
+// HandleFrame sets a callback for handling all the incoming Frames.
+//
+// If none is specified, the server will run a default handler.
 func (s *Server) HandleFrame(frameHandler FrameHandler) {
 	s.frHandler = frameHandler
 }
 
+// Upgrade upgrades websocket connections.
 func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 	if !ctx.IsGet() {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
