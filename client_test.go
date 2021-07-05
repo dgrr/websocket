@@ -32,6 +32,16 @@ func TestDial(t *testing.T) {
 		}
 	})
 
+	ws.HandleClose(func(c *Conn, err error) {
+		if err == nil {
+			t.Fatal("Expected err")
+		}
+
+		if err.(Error).Status != StatusGoAway {
+			t.Fatalf("Expected GoAway, got %s", err.(Error).Status)
+		}
+	})
+
 	s := fasthttp.Server{
 		Handler: ws.Upgrade,
 	}
@@ -56,7 +66,12 @@ func TestDial(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conn.Close()
+	fr := AcquireFrame()
+	fr.SetFin()
+	fr.SetClose()
+	fr.SetStatus(StatusGoAway)
+	conn.WriteFrame(fr)
+
 	ln.Close()
 
 	select {

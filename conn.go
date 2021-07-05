@@ -97,7 +97,6 @@ func (c *Conn) reset(conn net.Conn) {
 
 func (c *Conn) readLoop() {
 	defer c.wg.Done()
-	defer c.close()
 
 	for {
 		fr := AcquireFrame()
@@ -118,9 +117,11 @@ func (c *Conn) readLoop() {
 			break
 		}
 
+		isClose := fr.IsClose()
+
 		c.input <- fr
 
-		if fr.IsClose() {
+		if isClose {
 			break
 		}
 	}
@@ -141,6 +142,7 @@ func (ce closeError) Error() string {
 func (c *Conn) writeLoop() {
 	defer c.wg.Done()
 
+loop:
 	for {
 		select {
 		case fr := <-c.output:
@@ -151,9 +153,27 @@ func (c *Conn) writeLoop() {
 				}
 			}
 
+			isClose := fr.IsClose()
+
 			ReleaseFrame(fr)
+
+			if isClose {
+				return
+			}
 		case <-c.closer:
-			return
+			break loop
+		}
+	}
+
+	// flush all the frames
+	for n := len(c.output); n >= 0; n-- {
+		fr, ok := <-c.output
+		if !ok {
+			break
+		}
+
+		if err := c.writeFrame(fr); err != nil {
+			break
 		}
 	}
 }
@@ -202,37 +222,35 @@ func (c *Conn) WriteFrame(fr *Frame) {
 }
 
 func (c *Conn) Close() error {
-	fr := AcquireFrame()
-	fr.SetClose()
-	fr.SetStatus(StatusNone)
-	fr.SetFin()
-
-	c.WriteFrame(fr)
+	c.CloseDetail(StatusNone, "")
 
 	return nil
 }
 
 func (c *Conn) CloseDetail(status StatusCode, reason string) {
-	fr := AcquireFrame()
-	fr.SetClose()
-	fr.SetStatus(status)
-	fr.SetFin()
-	io.WriteString(fr, reason)
+	if !c.isClosed() {
+		fr := AcquireFrame()
+		fr.SetClose()
+		fr.SetStatus(status)
+		fr.SetFin()
 
-	c.WriteFrame(fr)
+		io.WriteString(fr, reason)
+
+		c.WriteFrame(fr)
+
+		close(c.closer)
+	}
 
 	return
 }
 
-func (c *Conn) close() error {
+func (c *Conn) isClosed() bool {
 	select {
 	case <-c.closer:
-		c.Close()
+		return true
 	default:
-		return nil
+		// if we reach this point, that means `closer` is not closed
+		// so we still have the connection alive
+		return false
 	}
-
-	close(c.closer)
-
-	return c.c.Close()
 }

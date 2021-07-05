@@ -223,6 +223,11 @@ loop:
 				break loop
 			}
 
+			if ce, ok := err.(Error); ok {
+				closeErr = ce
+				break loop
+			}
+
 			if s.errHandler != nil {
 				s.errHandler(c, err)
 			}
@@ -316,7 +321,7 @@ func (s *Server) handlePong(c *Conn, data []byte) {
 }
 
 func (s *Server) handleClose(c *Conn, fr *Frame) {
-	var err = func() error {
+	c.errch <- func() error {
 		if fr.Status() != StatusNone {
 			return Error{
 				Status: fr.Status(),
@@ -327,13 +332,11 @@ func (s *Server) handleClose(c *Conn, fr *Frame) {
 		return nil
 	}()
 
-	if s.closeHandler != nil {
-		s.closeHandler(c, err)
-	}
+	fr = AcquireFrame()
+	fr.SetClose()
+	fr.SetStatus(StatusNone)
+	fr.SetFin()
 
-	frRes := AcquireFrame()
-	frRes.SetClose()
-	frRes.SetStatus(fr.Status())
-
-	c.writeFrame(frRes)
+	// reply back
+	c.WriteFrame(fr)
 }

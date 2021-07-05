@@ -33,7 +33,7 @@ func configureServer(t *testing.T) (*fasthttp.Server, *fasthttputil.InmemoryList
 				t.Fatalf("Expecting Hello world, got %s", data)
 			}
 
-			c.CloseDetail(StatusNone, "Bye")
+			c.CloseDetail(StatusGoAway, "Bye")
 		}
 
 		stage++
@@ -45,6 +45,12 @@ func configureServer(t *testing.T) (*fasthttp.Server, *fasthttputil.InmemoryList
 		}
 
 		stage++
+	})
+
+	ws.HandleClose(func(c *Conn, err error) {
+		if err != nil {
+			t.Fatal(err)
+		}
 	})
 
 	s := &fasthttp.Server{
@@ -147,8 +153,8 @@ func TestReadFrame(t *testing.T) {
 	if string(p) != "Bye" {
 		t.Fatalf("Unexpected payload: %v <> Bye", p)
 	}
-	if fr.Status() != StatusNone {
-		t.Fatalf("Status unexpected: %d <> %d", fr.Status(), StatusNone)
+	if fr.Status() != StatusGoAway {
+		t.Fatalf("Status unexpected: %d <> %d", fr.Status(), StatusGoAway)
 	}
 
 	_, err = conn.WriteFrame(fr)
