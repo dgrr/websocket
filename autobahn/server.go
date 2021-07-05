@@ -7,14 +7,13 @@ import (
 )
 
 func main() {
-	ws := websocket.Server{
-	}
+	ws := websocket.Server{}
 
 	ws.HandleData(wsHandler)
 
 	fasthttp.ListenAndServe(":9000", ws.Upgrade)
 }
 
-func wsHandler(c *websocket.ServerConn, isBinary bool, data []byte) {
+func wsHandler(c *websocket.Conn, isBinary bool, data []byte) {
 	c.Write(data)
 }
