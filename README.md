@@ -12,16 +12,16 @@ go get github.com/dgrr/websocket
 
 # Why another WebSocket package?
 
-Other WebSocket packages don't allow concurrent Read/Write operations on servers
+**Other WebSocket packages DON'T** allow concurrent Read/Write operations on servers
 and they do not provide low level access to WebSocket packet crafting.
 Those WebSocket packages try to emulate the Golang API by implementing
 io.Reader and io.Writer interfaces on their connections. io.Writer might be a
-good idea to use it, but not io.Reader, given that WebSocket is an async protocol
+good idea to use it, but no io.Reader, given that WebSocket is an async protocol
 by nature (all protocols are (?)).
 
 Sometimes, WebSocket servers are just cumbersome when we want to handle a lot of
-clients in an async manner. For example, in other WebSocket packages to broadcast
-a message generated internally we'll need to do the following:
+clients in an async manner. For example, **in other WebSocket packages to broadcast
+a message generated internally we'll need to do the following**:
 
 ```go
 type MyWebSocketService struct {
