@@ -41,7 +41,7 @@ func main() {
 	c.Close()
 }
 
-func OnMessage(c *websocket.ServerConn, isBinary bool, data []byte) {
+func OnMessage(c *websocket.Conn, isBinary bool, data []byte) {
 	log.Printf("Received: %s\n", data)
 	c.Write(data)
 }

@@ -12,29 +12,29 @@ import (
 )
 
 type Broadcaster struct {
-	cs  sync.Map
+	cs  map[uint64]*websocket.Conn
 }
 
-func (b *Broadcaster) OnOpen(c *websocket.ServerConn) {
-	b.cs.Store(c.ID(), c)
+// it is concurrently safe
+func (b *Broadcaster) OnOpen(c *websocket.Conn) {
+	b.cs[c.ID()] = c
 }
 
-func (b *Broadcaster) OnClose(c *websocket.ServerConn, err error) {
+func (b *Broadcaster) OnClose(c *websocket.Conn, err error) {
 	if err != nil {
 		log.Printf("%d closed with error: %s\n", c.ID(), err)
 	} else {
 		log.Printf("%d closed the connection\n", c.ID())
 	}
+
+	delete(b.cs, c.ID())
 }
 
 func (b *Broadcaster) Start() {
 	for i := 0; ; i++ {
-		b.cs.Range(func(k, v interface{}) bool {
-			nc := v.(*websocket.ServerConn)
+		for _, nc := range b.cs {
 			fmt.Fprintf(nc, "Sending message number %d\n", i)
-
-			return true
-		})
+		}
 
 		time.Sleep(time.Second)
 	}

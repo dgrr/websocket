@@ -47,15 +47,43 @@ type Server struct {
 	pongHandler  PongHandler
 	errHandler   ErrorHandler
 
-	onceEnsure sync.Once
+	openCh  chan *Conn
+	closeCh chan serverClose
+
+	once sync.Once
 }
 
-func (s *Server) checkDefaults() {
+type serverClose struct {
+	c   *Conn
+	err error
+}
+
+func (s *Server) initServer() {
 	if s.frHandler != nil {
 		return
 	}
 
+	s.openCh = make(chan *Conn, 16)
+	s.closeCh = make(chan serverClose, 16)
+
 	s.frHandler = s.handleFrame
+
+	go s.handleOpenClose()
+}
+
+func (s *Server) handleOpenClose() {
+	for {
+		select {
+		case c := <-s.openCh:
+			if s.openHandler != nil {
+				s.openHandler(c)
+			}
+		case sc := <-s.closeCh:
+			if s.closeHandler != nil {
+				s.closeHandler(sc.c, sc.err)
+			}
+		}
+	}
 }
 
 // HandleData sets the MessageHandler.
@@ -93,7 +121,7 @@ func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	s.onceEnsure.Do(s.checkDefaults)
+	s.once.Do(s.initServer)
 
 	// Checking Origin header if needed
 	origin := ctx.Request.Header.Peek("Origin")
@@ -184,9 +212,7 @@ func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 }
 
 func (s *Server) serveConn(c *Conn) {
-	if s.openHandler != nil {
-		s.openHandler(c)
-	}
+	s.openCh <- c
 
 	var closeErr error
 
@@ -209,8 +235,9 @@ loop:
 		}
 	}
 
-	if s.closeHandler != nil {
-		s.closeHandler(c, closeErr)
+	s.closeCh <- serverClose{
+		c:   c,
+		err: closeErr,
 	}
 
 	c.c.Close()
@@ -219,6 +246,11 @@ loop:
 }
 
 func (s *Server) handleFrame(c *Conn, fr *Frame) {
+	// TODO: error if not masked
+	if fr.IsMasked() {
+		fr.Unmask()
+	}
+
 	if fr.IsControl() {
 		s.handleControl(c, fr)
 	} else {
@@ -230,11 +262,6 @@ func (s *Server) handleFrameData(c *Conn, fr *Frame) {
 	var data []byte
 
 	isBinary := fr.Code() == CodeBinary
-
-	// TODO: error if not masked
-	if fr.IsMasked() {
-		fr.Unmask()
-	}
 
 	bf := c.buffered
 	if bf == nil {
@@ -278,6 +305,7 @@ func (s *Server) handlePing(c *Conn, data []byte) {
 	pong := AcquireFrame()
 	pong.SetCode(CodePong)
 	pong.SetPayload(data)
+	pong.SetFin()
 
 	c.WriteFrame(pong)
 

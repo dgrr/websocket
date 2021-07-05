@@ -176,6 +176,7 @@ func (c *Conn) writeFrame(fr *Frame) error {
 func (c *Conn) Ping(data []byte) {
 	fr := AcquireFrame()
 	fr.SetPing()
+	fr.SetFin()
 	fr.SetPayload(data)
 
 	c.WriteFrame(fr)
