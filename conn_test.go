@@ -14,7 +14,7 @@ import (
 func configureServer(t *testing.T) (*fasthttp.Server, *fasthttputil.InmemoryListener) {
 	ln := fasthttputil.NewInmemoryListener()
 	s := &fasthttp.Server{
-		Handler: Upgrade(func(conn *ServerConn) {
+		Handler: Upgrade(func(conn *Conn) {
 			m, b, err := conn.ReadMessage(nil)
 			if err != nil {
 				panic(err)
@@ -54,7 +54,7 @@ func configureServer(t *testing.T) (*fasthttp.Server, *fasthttputil.InmemoryList
 	return s, ln
 }
 
-func openConn(t *testing.T, ln *fasthttputil.InmemoryListener) *ServerConn {
+func openConn(t *testing.T, ln *fasthttputil.InmemoryListener) *Conn {
 	c, err := ln.Dial()
 	if err != nil {
 		t.Fatal(err)
@@ -151,7 +151,7 @@ func TestReadFrame(t *testing.T) {
 	<-ch
 }
 
-func handleConcurrentRead(conn *ServerConn) (err error) {
+func handleConcurrentRead(conn *Conn) (err error) {
 	var b []byte
 	for {
 		_, b, err = conn.ReadMessage(b[:0])
@@ -172,7 +172,7 @@ func handleConcurrentRead(conn *ServerConn) (err error) {
 
 var textToSend = "hello"
 
-func writeConcurrently(conn *ServerConn) (err error) {
+func writeConcurrently(conn *Conn) (err error) {
 	for i := 0; i < 10; i++ {
 		_, err = conn.WriteString(textToSend)
 		if err != nil {
@@ -185,7 +185,7 @@ func writeConcurrently(conn *ServerConn) (err error) {
 func TestReadConcurrently(t *testing.T) {
 	ln := fasthttputil.NewInmemoryListener()
 	s := fasthttp.Server{
-		Handler: Upgrade(func(conn *ServerConn) {
+		Handler: Upgrade(func(conn *Conn) {
 			var wg sync.WaitGroup
 			for i := 0; i < 10; i++ {
 				wg.Add(1)
@@ -223,7 +223,7 @@ func TestReadConcurrently(t *testing.T) {
 func TestCloseWhileReading(t *testing.T) {
 	ln := fasthttputil.NewInmemoryListener()
 	s := fasthttp.Server{
-		Handler: Upgrade(func(conn *ServerConn) {
+		Handler: Upgrade(func(conn *Conn) {
 			go func() {
 				_, _, err := conn.ReadMessage(nil)
 				if err != nil {
@@ -251,7 +251,7 @@ func TestUserValue(t *testing.T) {
 	ln := fasthttputil.NewInmemoryListener()
 	upgr := Upgrader{
 		Origin: uri,
-		Handler: func(conn *ServerConn) {
+		Handler: func(conn *Conn) {
 			v := conn.UserValue("custom")
 			if v == nil {
 				t.Fatal("custom is nil")

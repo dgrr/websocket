@@ -25,7 +25,7 @@ func TestDial(t *testing.T) {
 	ln := fasthttputil.NewInmemoryListener()
 	upgr := Upgrader{
 		Origin: uri,
-		Handler: func(conn *ServerConn) {
+		Handler: func(conn *Conn) {
 			for {
 				_, b, err := conn.ReadMessage(nil)
 				if err != nil {
@@ -75,7 +75,7 @@ func TestDial(t *testing.T) {
 }
 
 type hijackHandler struct {
-	h func(c *ServerConn)
+	h func(c *Conn)
 }
 
 func (h *hijackHandler) sendResponseUpgrade(ctx *fasthttp.RequestCtx) {
@@ -97,7 +97,7 @@ func TestDialLowerCaseWebsocketString(t *testing.T) {
 	var text = []byte("Make fasthttp great again")
 	var uri = "http://localhost:9844/"
 	ln := fasthttputil.NewInmemoryListener()
-	hfn := func(conn *ServerConn) {
+	hfn := func(conn *Conn) {
 		_, b, err := conn.ReadMessage(nil)
 		if err != nil {
 			panic(err)
@@ -148,7 +148,7 @@ func TestClientConcurrentWrite(t *testing.T) {
 	ln := fasthttputil.NewInmemoryListener()
 	upgr := Upgrader{
 		Origin: uri,
-		Handler: func(conn *ServerConn) {
+		Handler: func(conn *Conn) {
 			cnt := 0
 			for {
 				_, b, err := conn.ReadMessage(nil)
@@ -240,7 +240,7 @@ func TestConnCloseWhileReading(t *testing.T) {
 	ln := fasthttputil.NewInmemoryListener()
 	upgr := Upgrader{
 		Origin: uri,
-		Handler: func(conn *ServerConn) {
+		Handler: func(conn *Conn) {
 			go func() {
 				for {
 					_, _, err := conn.ReadMessage(nil)

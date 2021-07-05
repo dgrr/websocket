@@ -154,7 +154,7 @@ func buildUpgrade() (s []byte) {
 
 func benchmarkFastServer(b *testing.B, clients, count int) {
 	s := fasthttp.Server{
-		Handler: Upgrade(func(conn *ServerConn) {
+		Handler: Upgrade(func(conn *Conn) {
 			var err error
 			var bf []byte
 			for {

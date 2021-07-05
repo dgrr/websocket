@@ -17,14 +17,14 @@ var (
 	ErrCannotUpgrade = errors.New("cannot upgrade connection")
 )
 
-// MakeClient returns ServerConn using existing connection.
+// MakeClient returns Conn using existing connection.
 //
 // url must be complete URL format i.e. http://localhost:8080/ws
 func MakeClient(c net.Conn, url string) (*Client, error) {
 	return client(c, url, nil)
 }
 
-// ClientWithHeaders returns a ServerConn using existing connection and sending personalized headers.
+// ClientWithHeaders returns a Conn using existing connection and sending personalized headers.
 func ClientWithHeaders(c net.Conn, url string, req *fasthttp.Request) (*Client, error) {
 	return client(c, url, req)
 }

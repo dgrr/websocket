@@ -12,13 +12,13 @@ import (
 
 type (
 	// OpenHandler ...
-	OpenHandler    func(c *ServerConn)
-	PingHandler    func(c *ServerConn, data []byte)
-	PongHandler    func(c *ServerConn, data []byte)
-	MessageHandler func(c *ServerConn, isBinary bool, data []byte)
-	FrameHandler   func(c *ServerConn, fr *Frame)
-	CloseHandler   func(c *ServerConn, err error)
-	ErrorHandler   func(c *ServerConn, err error)
+	OpenHandler    func(c *Conn)
+	PingHandler    func(c *Conn, data []byte)
+	PongHandler    func(c *Conn, data []byte)
+	MessageHandler func(c *Conn, isBinary bool, data []byte)
+	FrameHandler   func(c *Conn, fr *Frame)
+	CloseHandler   func(c *Conn, err error)
+	ErrorHandler   func(c *Conn, err error)
 )
 
 // Server represents the WebSocket server.
@@ -53,10 +53,6 @@ type Server struct {
 func (s *Server) checkDefaults() {
 	if s.frHandler != nil {
 		return
-	}
-
-	if s.pingHandler == nil {
-		s.pingHandler = s.handlePing
 	}
 
 	s.frHandler = s.handleFrame
@@ -187,7 +183,7 @@ func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-func (s *Server) serveConn(c *ServerConn) {
+func (s *Server) serveConn(c *Conn) {
 	if s.openHandler != nil {
 		s.openHandler(c)
 	}
@@ -222,7 +218,7 @@ loop:
 	c.wg.Wait()
 }
 
-func (s *Server) handleFrame(c *ServerConn, fr *Frame) {
+func (s *Server) handleFrame(c *Conn, fr *Frame) {
 	if fr.IsControl() {
 		s.handleControl(c, fr)
 	} else {
@@ -230,7 +226,7 @@ func (s *Server) handleFrame(c *ServerConn, fr *Frame) {
 	}
 }
 
-func (s *Server) handleFrameData(c *ServerConn, fr *Frame) {
+func (s *Server) handleFrameData(c *Conn, fr *Frame) {
 	var data []byte
 
 	isBinary := fr.Code() == CodeBinary
@@ -267,30 +263,36 @@ func (s *Server) handleFrameData(c *ServerConn, fr *Frame) {
 	ReleaseFrame(fr)
 }
 
-func (s *Server) handleControl(c *ServerConn, fr *Frame) {
+func (s *Server) handleControl(c *Conn, fr *Frame) {
 	switch {
 	case fr.IsPing():
-		s.pingHandler(c, fr.Payload())
+		s.handlePing(c, fr.Payload())
 	case fr.IsPong():
-		s.pongHandler(c, fr.Payload())
+		s.handlePong(c, fr.Payload())
 	case fr.IsClose():
 		s.handleClose(c, fr)
 	}
 }
 
-func (s *Server) handlePing(c *ServerConn, data []byte) {
+func (s *Server) handlePing(c *Conn, data []byte) {
 	pong := AcquireFrame()
 	pong.SetCode(CodePong)
 	pong.SetPayload(data)
 
 	c.WriteFrame(pong)
+
+	if s.pingHandler != nil {
+		s.pingHandler(c, data)
+	}
 }
 
-func (s *Server) handlePong(c *ServerConn, data []byte) {
-
+func (s *Server) handlePong(c *Conn, data []byte) {
+	if s.pongHandler != nil {
+		s.pongHandler(c, data)
+	}
 }
 
-func (s *Server) handleClose(c *ServerConn, fr *Frame) {
+func (s *Server) handleClose(c *Conn, fr *Frame) {
 	fr.Unmask()
 
 	var err = func() error {

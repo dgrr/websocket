@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-// ServerConn represents websocket connection handler.
+// Conn represents a WebSocket connection on the server side.
 //
-// This handler is compatible with io.Reader, io.ReaderFrom, io.Writer, io.WriterTo
-type ServerConn struct {
+// This handler is compatible with io.Writer.
+type Conn struct {
 	c  net.Conn
 	bw *bufio.Writer
 
@@ -42,32 +42,32 @@ type ServerConn struct {
 }
 
 // ID returns a unique identifier for the connection.
-func (c *ServerConn) ID() uint64 {
+func (c *Conn) ID() uint64 {
 	return c.id
 }
 
 // UserValue returns the key associated value.
-func (c *ServerConn) UserValue(key string) interface{} {
+func (c *Conn) UserValue(key string) interface{} {
 	return c.userValues[key]
 }
 
 // SetUserValue assigns a key to the given value
-func (c *ServerConn) SetUserValue(key string, value interface{}) {
+func (c *Conn) SetUserValue(key string, value interface{}) {
 	c.userValues[key] = value
 }
 
 // LocalAddr returns local address.
-func (c *ServerConn) LocalAddr() net.Addr {
+func (c *Conn) LocalAddr() net.Addr {
 	return c.c.LocalAddr()
 }
 
 // RemoteAddr returns peer remote address.
-func (c *ServerConn) RemoteAddr() net.Addr {
+func (c *Conn) RemoteAddr() net.Addr {
 	return c.c.RemoteAddr()
 }
 
-func acquireConn(c net.Conn) (conn *ServerConn) {
-	conn = &ServerConn{}
+func acquireConn(c net.Conn) (conn *Conn) {
+	conn = &Conn{}
 	conn.reset(c)
 	conn.wg.Add(2)
 
@@ -81,7 +81,7 @@ func acquireConn(c net.Conn) (conn *ServerConn) {
 const DefaultPayloadSize = 1 << 20
 
 // Reset resets conn values setting c as default connection endpoint.
-func (c *ServerConn) reset(conn net.Conn) {
+func (c *Conn) reset(conn net.Conn) {
 	c.input = make(chan *Frame, 128)
 	c.output = make(chan *Frame, 128)
 	c.closer = make(chan struct{}, 1)
@@ -94,7 +94,7 @@ func (c *ServerConn) reset(conn net.Conn) {
 	c.bw = bufio.NewWriter(conn)
 }
 
-func (c *ServerConn) readLoop() {
+func (c *Conn) readLoop() {
 	defer c.wg.Done()
 	defer c.Close()
 
@@ -137,7 +137,7 @@ func (ce closeError) Error() string {
 	return ce.err.Error()
 }
 
-func (c *ServerConn) writeLoop() {
+func (c *Conn) writeLoop() {
 	defer c.wg.Done()
 
 	for {
@@ -157,7 +157,7 @@ func (c *ServerConn) writeLoop() {
 	}
 }
 
-func (c *ServerConn) writeFrame(fr *Frame) error {
+func (c *Conn) writeFrame(fr *Frame) error {
 	fr.SetPayloadSize(c.MaxPayloadSize)
 
 	if c.WriteTimeout > 0 {
@@ -173,7 +173,15 @@ func (c *ServerConn) writeFrame(fr *Frame) error {
 	return err
 }
 
-func (c *ServerConn) Write(data []byte) (int, error) {
+func (c *Conn) Ping(data []byte) {
+	fr := AcquireFrame()
+	fr.SetPing()
+	fr.SetPayload(data)
+
+	c.WriteFrame(fr)
+}
+
+func (c *Conn) Write(data []byte) (int, error) {
 	n := len(data)
 
 	fr := AcquireFrame()
@@ -187,11 +195,11 @@ func (c *ServerConn) Write(data []byte) (int, error) {
 	return n, nil
 }
 
-func (c *ServerConn) WriteFrame(fr *Frame) {
+func (c *Conn) WriteFrame(fr *Frame) {
 	c.output <- fr
 }
 
-func (c *ServerConn) Close() error {
+func (c *Conn) Close() error {
 	select {
 	case <-c.closer:
 	default:

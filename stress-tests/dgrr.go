@@ -6,7 +6,7 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-func OnMessage(c *websocket.ServerConn, isBinary bool, data []byte) {
+func OnMessage(c *websocket.Conn, isBinary bool, data []byte) {
 	c.Write(data)
 }
 

@@ -10,7 +10,7 @@ import (
 
 type (
 	// RequestHandler is the websocket connection handler.
-	RequestHandler func(conn *ServerConn)
+	RequestHandler func(conn *Conn)
 	// UpgradeHandler is the upgrading handler.
 	UpgradeHandler func(*fasthttp.RequestCtx) bool
 )
