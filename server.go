@@ -12,11 +12,11 @@ import (
 
 type (
 	// OpenHandler handles when a connection is open.
-	OpenHandler    func(c *Conn)
+	OpenHandler func(c *Conn)
 	// PingHandler handles the data from a ping frame.
-	PingHandler    func(c *Conn, data []byte)
+	PingHandler func(c *Conn, data []byte)
 	// PongHandler receives the data from a pong frame.
-	PongHandler    func(c *Conn, data []byte)
+	PongHandler func(c *Conn, data []byte)
 	// MessageHandler receives the payload content of a data frame
 	// indicating whether the content is binary or not.
 	MessageHandler func(c *Conn, isBinary bool, data []byte)
@@ -24,11 +24,11 @@ type (
 	// if none is specified the server will run a default handler.
 	//
 	// If the user specifies a FrameHandler, then it is going to receive all incoming frames.
-	FrameHandler   func(c *Conn, fr *Frame)
+	FrameHandler func(c *Conn, fr *Frame)
 	// CloseHandler fires when a connection has been closed.
-	CloseHandler   func(c *Conn, err error)
+	CloseHandler func(c *Conn, err error)
 	// ErrorHandler fires when an unknown error happens.
-	ErrorHandler   func(c *Conn, err error)
+	ErrorHandler func(c *Conn, err error)
 )
 
 // Server represents the WebSocket server.
@@ -57,9 +57,6 @@ type Server struct {
 	pongHandler  PongHandler
 	errHandler   ErrorHandler
 
-	openCh  chan *Conn
-	closeCh chan serverClose
-
 	once sync.Once
 }
 
@@ -73,27 +70,7 @@ func (s *Server) initServer() {
 		return
 	}
 
-	s.openCh = make(chan *Conn, 16)
-	s.closeCh = make(chan serverClose, 16)
-
 	s.frHandler = s.handleFrame
-
-	go s.handleOpenClose()
-}
-
-func (s *Server) handleOpenClose() {
-	for {
-		select {
-		case c := <-s.openCh:
-			if s.openHandler != nil {
-				s.openHandler(c)
-			}
-		case sc := <-s.closeCh:
-			if s.closeHandler != nil {
-				s.closeHandler(sc.c, sc.err)
-			}
-		}
-	}
 }
 
 // HandleData sets the MessageHandler.
@@ -227,6 +204,10 @@ func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 				// establishing default options
 				conn.userValues = userValues
 
+				if s.openHandler != nil {
+					s.openHandler(conn)
+				}
+
 				s.serveConn(conn)
 			})
 		}
@@ -234,8 +215,6 @@ func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 }
 
 func (s *Server) serveConn(c *Conn) {
-	s.openCh <- c
-
 	var closeErr error
 
 loop:
@@ -257,9 +236,8 @@ loop:
 		}
 	}
 
-	s.closeCh <- serverClose{
-		c:   c,
-		err: closeErr,
+	if s.closeHandler != nil {
+		s.closeHandler(c, closeErr)
 	}
 
 	c.c.Close()
@@ -343,8 +321,6 @@ func (s *Server) handlePong(c *Conn, data []byte) {
 }
 
 func (s *Server) handleClose(c *Conn, fr *Frame) {
-	fr.Unmask()
-
 	var err = func() error {
 		if fr.Status() != StatusNone {
 			return Error{

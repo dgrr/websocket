@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/dgrr/websocket"
@@ -11,12 +12,13 @@ import (
 )
 
 type Broadcaster struct {
-	cs  map[uint64]*websocket.Conn
+	cs  sync.Map
 }
 
-// it is concurrently safe
 func (b *Broadcaster) OnOpen(c *websocket.Conn) {
-	b.cs[c.ID()] = c
+	b.cs.Store(c.ID(), c)
+
+	log.Printf("%s connected\n", c.RemoteAddr())
 }
 
 func (b *Broadcaster) OnClose(c *websocket.Conn, err error) {
@@ -26,23 +28,28 @@ func (b *Broadcaster) OnClose(c *websocket.Conn, err error) {
 		log.Printf("%d closed the connection\n", c.ID())
 	}
 
-	delete(b.cs, c.ID())
+	b.cs.Delete(c.ID())
 }
 
-func (b *Broadcaster) Start() {
-	for i := 0; ; i++ {
-		for _, nc := range b.cs {
-			fmt.Fprintf(nc, "Sending message number %d\n", i)
-		}
+func (b *Broadcaster) Start(i int) {
+	time.AfterFunc(time.Second, b.sendData(i))
+}
 
-		time.Sleep(time.Second)
+func (b *Broadcaster) sendData(i int) func() {
+	return func() {
+		b.cs.Range(func(_, v interface{}) bool {
+			nc := v.(*websocket.Conn)
+			fmt.Fprintf(nc, "Sending message number %d\n", i)
+
+			return true
+		})
+
+		b.Start(i+1)
 	}
 }
 
 func main() {
-	b := &Broadcaster{
-		cs: make(map[uint64]*websocket.Conn),
-	}
+	b := &Broadcaster{}
 
 	wServer := websocket.Server{}
 	wServer.HandleOpen(b.OnOpen)
@@ -56,7 +63,7 @@ func main() {
 		Handler: router.Handler,
 	}
 
-	go b.Start()
+	b.Start(0)
 
 	server.ListenAndServe(":8080")
 }

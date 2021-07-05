@@ -119,11 +119,11 @@ const (
 // Frame is the unit used to transfer message
 // between endpoints using the websocket protocol.
 type Frame struct {
-	max    uint64
-	op     []byte
-	mask   []byte
-	status []byte
-	b      []byte
+	max           uint64
+	op            []byte
+	mask          []byte
+	b             []byte
+	statusDefined bool
 }
 
 // CopyTo copies the frame `fr` to `fr2`
@@ -131,7 +131,6 @@ func (fr *Frame) CopyTo(fr2 *Frame) {
 	fr2.max = fr.max
 	fr2.op = append(fr2.op[:0], fr.op...)
 	fr2.mask = append(fr2.mask[:0], fr.mask...)
-	fr2.status = append(fr2.status[:0], fr.status...)
 	fr2.b = append(fr2.b[:0], fr.b...)
 }
 
@@ -160,12 +159,12 @@ Data: %v`,
 var framePool = sync.Pool{
 	New: func() interface{} {
 		fr := &Frame{
-			max:    DefaultPayloadSize,
-			op:     make([]byte, opSize),
-			mask:   make([]byte, maskSize),
-			status: make([]byte, statusSize),
-			b:      make([]byte, 0, 128),
+			max:  DefaultPayloadSize,
+			op:   make([]byte, opSize),
+			mask: make([]byte, maskSize),
+			b:    make([]byte, 0, 128),
 		}
+
 		return fr
 	},
 }
@@ -186,15 +185,14 @@ func (fr *Frame) resetPayload() {
 }
 
 const (
-	statusSize = 2
-	maskSize   = 4
-	opSize     = 10
+	maskSize = 4
+	opSize   = 10
 )
 
 func (fr *Frame) resetHeader() {
 	copy(fr.op, zeroBytes)
 	copy(fr.mask, zeroBytes)
-	copy(fr.status, zeroBytes)
+	fr.statusDefined = false
 }
 
 // Reset resets all Frame values to the default.
@@ -281,17 +279,12 @@ func (fr *Frame) MaskKey() []byte {
 	return fr.mask[:4]
 }
 
-func (fr *Frame) parseStatus() {
-	n := len(fr.b)
-	if n >= 2 {
-		// copy the status from the payload to the fr.status
-		copy(fr.status, fr.b[:2])
-		fr.b = append(fr.b[:0], fr.b[2:]...)
-	}
-}
-
 // Payload returns the frame payload.
 func (fr *Frame) Payload() []byte {
+	if fr.IsClose() {
+		return fr.b[2:]
+	}
+
 	return fr.b
 }
 
@@ -332,7 +325,6 @@ func (fr *Frame) SetRSV3() {
 
 // SetCode sets code bits.
 func (fr *Frame) SetCode(code Code) {
-	// TODO: Check non-reserved fields.
 	code &= 15
 	fr.op[0] &= 15 << 4
 	fr.op[0] |= uint8(code)
@@ -396,9 +388,7 @@ func (fr *Frame) SetPayload(b []byte) {
 // for sending out the payload's length.
 func (fr *Frame) setPayloadLen() (s int) {
 	n := len(fr.b)
-	if fr.hasStatus() { // status code is embed into the payload
-		n += 2
-	}
+
 	switch {
 	case n > 65535:
 		s = 8
@@ -423,6 +413,7 @@ func (fr *Frame) setLength(n int) {
 // Mask performs the masking of the current payload
 func (fr *Frame) Mask() {
 	fr.op[1] |= maskBit
+
 	readMask(fr.mask)
 	if len(fr.b) > 0 {
 		mask(fr.mask, fr.b)
@@ -435,11 +426,8 @@ func (fr *Frame) Unmask() {
 		key := fr.MaskKey()
 		mask(key, fr.b)
 	}
-	fr.UnsetMask()
-}
 
-func (fr *Frame) hasStatus() bool {
-	return fr.status[0] > 0 || fr.status[1] > 0
+	fr.UnsetMask()
 }
 
 // WriteTo writes the frame into wr.
@@ -452,24 +440,18 @@ func (fr *Frame) WriteTo(wr io.Writer) (n int64, err error) {
 	ni, err = wr.Write(fr.op[:s+2])
 	if err == nil {
 		n += int64(ni)
+
 		if fr.IsMasked() {
 			ni, err = wr.Write(fr.mask)
 			if ni > 0 {
 				n += int64(ni)
 			}
 		}
-		if err == nil {
-			if fr.hasStatus() {
-				ni, err = wr.Write(fr.status)
-				if ni > 0 {
-					n += int64(ni)
-				}
-			}
-			if err == nil && len(fr.b) > 0 {
-				ni, err = wr.Write(fr.b)
-				if ni > 0 {
-					n += int64(ni)
-				}
+
+		if err == nil && len(fr.b) > 0 {
+			ni, err = wr.Write(fr.b)
+			if ni > 0 {
+				n += int64(ni)
 			}
 		}
 	}
@@ -480,8 +462,9 @@ func (fr *Frame) WriteTo(wr io.Writer) (n int64, err error) {
 // Status returns StatusCode.
 func (fr *Frame) Status() (status StatusCode) {
 	status = StatusCode(
-		binary.BigEndian.Uint16(fr.status),
+		binary.BigEndian.Uint16(fr.b[:2]),
 	)
+
 	return
 }
 
@@ -489,7 +472,16 @@ func (fr *Frame) Status() (status StatusCode) {
 //
 // Status code is usually used in Close request.
 func (fr *Frame) SetStatus(status StatusCode) {
-	binary.BigEndian.PutUint16(fr.status, uint16(status))
+	if !fr.statusDefined {
+		if cap(fr.b) < 2 {
+			fr.b = append(fr.b, make([]byte, 2)...)
+		}
+
+		fr.b = append(fr.b[:2], fr.b...)
+	}
+	fr.statusDefined = true
+
+	binary.BigEndian.PutUint16(fr.b[:2], uint16(status))
 }
 
 // mustRead returns the number of bytes that must be
@@ -567,16 +559,7 @@ func (fr *Frame) readFrom(r io.Reader) (int64, error) {
 					panic("uint64 to int64 conversion gave a negative number")
 				}
 
-				isClose := fr.IsClose()
-				if isClose {
-					n, err = io.ReadFull(r, fr.status[:2])
-					if err == io.ErrUnexpectedEOF {
-						err = errStatusLen
-					}
-					nn -= 2
-				}
-
-				if err == nil && nn > 0 {
+				if nn > 0 {
 					if rLen := nn - int64(cap(fr.b)); rLen > 0 {
 						fr.b = append(fr.b[:cap(fr.b)], make([]byte, rLen)...)
 					}

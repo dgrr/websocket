@@ -59,6 +59,7 @@ to the client.
 package main
 
 import (
+	"sync"
 	"encoding/binary"
 	"log"
 	"time"
@@ -71,7 +72,7 @@ import (
 //
 // it should be safe to access the clients concurrently from Open and Close.
 type RTTMeasure struct {
-	clients map[uint64]*websocket.Conn
+	clients sync.Map
 }
 
 // just trigger the ping sender
@@ -86,33 +87,29 @@ func (rtt *RTTMeasure) sendPings() {
 		time.Now().UnixNano()),
 	)
 
-	// attention! rtt.client is not safe here because it's being accessed
-	// from another goroutine other than the websocket.Server one.
-	// That means, if while we are reading from the map, a client is being
-	// deleted, then Golang may panic here.
-	for _, c := range rtt.clients {
+	rtt.clients.Range(func(_, v interface{}) bool {
+		c := v.(*websocket.Conn)
 		c.Ping(data[:])
-	}
+		return true
+	})
 
 	rtt.Start()
 }
 
 // register a connection when it's open
 func (rtt *RTTMeasure) RegisterConn(c *websocket.Conn) {
-	rtt.clients[c.ID()] = c
+	rtt.clients.Store(c.ID(), c)
 	log.Printf("Client %s connected\n", c.RemoteAddr())
 }
 
 // remove the connection when receiving the close
 func (rtt *RTTMeasure) RemoveConn(c *websocket.Conn, err error) {
-	delete(rtt.clients, c.ID())
+	rtt.clients.Delete(c.ID())
 	log.Printf("Client %s disconnected\n", c.RemoteAddr())
 }
 
 func main() {
-	rtt := RTTMeasure{
-		clients: make(map[uint64]*websocket.Conn),
-	}
+	rtt := RTTMeasure{}
 
 	ws := websocket.Server{}
 	ws.HandleOpen(rtt.RegisterConn)
@@ -125,7 +122,7 @@ func main() {
 	fasthttp.ListenAndServe(":8080", ws.Upgrade)
 }
 
-	// handle the pong message
+// handle the pong message
 func OnPong(c *websocket.Conn, data []byte) {
 	if len(data) == 8 {
 		n := binary.BigEndian.Uint64(data)
