@@ -83,8 +83,8 @@ func (rtt *RTTMeasure) sendPings() {
 	var data [8]byte
 
 	binary.BigEndian.PutUint64(data[:], uint64(
-	time.Now().UnixNano()),
-)
+		time.Now().UnixNano()),
+	)
 
 	// attention! rtt.client is not safe here because it's being accessed
 	// from another goroutine other than the websocket.Server one.
