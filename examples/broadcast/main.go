@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/dgrr/websocket"
@@ -41,7 +40,9 @@ func (b *Broadcaster) Start() {
 }
 
 func main() {
-	b := &Broadcaster{}
+	b := &Broadcaster{
+		cs: make(map[uint64]*websocket.Conn),
+	}
 
 	wServer := websocket.Server{}
 	wServer.HandleOpen(b.OnOpen)

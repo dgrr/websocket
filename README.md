@@ -15,6 +15,128 @@ while keeping your code concurrently safe.
 
 To see an example of what this package CAN do that others DONT checkout [the broadcast example](https://github.com/dgrr/websocket/blob/master/examples/broadcast.go).
 
+# Server
+
+## How can I launch a server?
+
+It's quite easy. You only need to create a [Server](https://pkg.go.dev/github.com/dgrr/websocket?utm_source=godoc#Server),
+set your callbacks by calling the [Handle*](https://pkg.go.dev/github.com/dgrr/websocket?utm_source=godoc#Server.HandleClose) methods
+and then specify your fasthttp handler as [Server.Upgrade](https://pkg.go.dev/github.com/dgrr/websocket?utm_source=godoc#Server.Upgrade).
+
+```go
+package main
+
+import (
+	"fmt"
+	
+	"github.com/valyala/fasthttp"
+	"github.com/dgrr/websocket"
+)
+
+func main() {
+	ws := websocket.Server{}
+	ws.HandleData(OnMessage)
+	
+	fasthttp.ListenAndServe(":8080", ws.Upgrade)
+}
+
+func OnMessage(c *websocket.Conn, isBinary bool, data []byte) {
+	fmt.Printf("Received data from %s: %s\n", c.RemoteAddr(), data)
+}
+```
+
+## How can I handle pings?
+
+Pings are automatically handled by the library, but you can get the content of
+those pings setting the callback using [HandlePing](https://pkg.go.dev/github.com/dgrr/websocket?utm_source=godoc#Server.HandlePing).
+
+For example, let's try to get the round trip time to a client. For that,
+we'll ping the client setting the frame's payload as the current timestamp,
+when we get the PONG frame we can check the current time minus the time sent
+to the client.
+
+```go
+package main
+
+import (
+	"encoding/binary"
+    "log"
+	"time"
+
+	"github.com/valyala/fasthttp"
+	"github.com/dgrr/websocket"
+)
+
+// Struct to keep the clients connected
+//
+// it should be safe to access the clients concurrently from Open and Close.
+type RTTMeasure struct {
+	clients map[uint64]*websocket.Conn
+}
+
+// just trigger the ping sender
+func (rtt *RTTMeasure) Start() {
+	time.AfterFunc(time.Second * 2, rtt.sendPings)
+}
+
+func (rtt *RTTMeasure) sendPings() {
+    var data [8]byte
+    
+    binary.BigEndian.PutUint64(data[:], uint64(
+    	time.Now().UnixNano()),
+    )
+    
+    // attention! rtt.client is not safe here because it's being accessed
+    // from another goroutine other than the websocket.Server one.
+    // That means, if while we are reading from the map, a client is being
+    // deleted, then Golang may panic here.
+    for _, c := range rtt.clients {
+		c.Ping(data[:])
+    }
+    
+    rtt.Start()
+}
+
+// register a connection when it's open
+func (rtt *RTTMeasure) RegisterConn(c *websocket.Conn) {
+	rtt.clients[c.ID()] = c
+	log.Printf("Client %s connected\n", c.RemoteAddr())
+}
+
+// remove the connection when receiving the close
+func (rtt *RTTMeasure) RemoveConn(c *websocket.Conn, err error) {
+	delete(rtt.clients, c.ID())
+    log.Printf("Client %s disconnected\n", c.RemoteAddr())
+}
+
+func main() {
+	rtt := RTTMeasure{
+		clients: make(map[uint64]*websocket.Conn),
+    }
+	
+	ws := websocket.Server{}
+	ws.HandleOpen(rtt.RegisterConn)
+	ws.HandleClose(rtt.RemoveConn)
+	ws.HandlePong(OnPong)
+	
+	// schedule the timer
+	rtt.Start()
+
+	fasthttp.ListenAndServe(":8080", ws.Upgrade)
+}
+
+// handle the pong message
+func OnPong(c *websocket.Conn, data []byte) {
+	if len(data) == 8 {
+		n := binary.BigEndian.Uint64(data)
+		ts := time.Unix(0, int64(n))
+
+		log.Printf("RTT with %s is %s\n", c.RemoteAddr(), time.Now().Sub(ts))
+	}
+}
+```
+
+
 # websocket vs gorilla vs nhooyr vs gobwas
 
 | Features | [websocket](https://github.com/dgrr/websocket) | [Gorilla](https://github.com/fasthttp/websocket)| [Nhooyr](https://github.com/nhooyr/websocket) | [gowabs](https://github.com/gobwas/ws) |
