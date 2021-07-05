@@ -171,7 +171,10 @@ func makeRandKey(b []byte) []byte {
 	return b
 }
 
-// Client represents a client connection.
+// Client holds a WebSocket connection.
+//
+// The client is NOT concurrently safe. It is intended to be
+// used with the Frame struct.
 type Client struct {
 	c   net.Conn
 	brw *bufio.ReadWriter
