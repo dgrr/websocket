@@ -381,7 +381,16 @@ func (fr *Frame) Write(b []byte) (int, error) {
 
 // SetPayload sets the parsed bytes as frame's payload
 func (fr *Frame) SetPayload(b []byte) {
-	fr.b = append(fr.b[:0], b...)
+	n := 0
+	if fr.IsClose() {
+		n = 2
+
+		if cap(fr.b) < 2 {
+			fr.b = append(fr.b, make([]byte, 2)...)
+		}
+	}
+
+	fr.b = append(fr.b[:n], b...)
 }
 
 // setPayloadLen returns the number of bytes the header will use
@@ -415,14 +424,14 @@ func (fr *Frame) Mask() {
 	fr.op[1] |= maskBit
 
 	readMask(fr.mask)
-	if len(fr.b) > 0 {
+	if len(fr.b) != 0 {
 		mask(fr.mask, fr.b)
 	}
 }
 
 // Unmask performs the unmasking of the current payload
 func (fr *Frame) Unmask() {
-	if len(fr.b) > 0 {
+	if len(fr.b) != 0 {
 		key := fr.MaskKey()
 		mask(key, fr.b)
 	}
@@ -448,7 +457,7 @@ func (fr *Frame) WriteTo(wr io.Writer) (n int64, err error) {
 			}
 		}
 
-		if err == nil && len(fr.b) > 0 {
+		if err == nil && len(fr.b) != 0 {
 			ni, err = wr.Write(fr.b)
 			if ni > 0 {
 				n += int64(ni)
@@ -461,9 +470,9 @@ func (fr *Frame) WriteTo(wr io.Writer) (n int64, err error) {
 
 // Status returns StatusCode.
 func (fr *Frame) Status() (status StatusCode) {
-	status = StatusCode(
-		binary.BigEndian.Uint16(fr.b[:2]),
-	)
+	u := binary.BigEndian.Uint16(fr.b[:2])
+
+	status = StatusCode(u)
 
 	return
 }
@@ -501,7 +510,6 @@ func (fr *Frame) mustRead() (n int) {
 
 var (
 	// EOF represents an io.EOF error.
-	EOF                = io.EOF
 	errMalformedHeader = errors.New("malformed header")
 	errBadHeaderSize   = errors.New("header size is insufficient")
 )

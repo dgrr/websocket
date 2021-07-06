@@ -332,9 +332,11 @@ func (s *Server) handleClose(c *Conn, fr *Frame) {
 		return nil
 	}()
 
+	status := fr.Status()
+
 	fr = AcquireFrame()
 	fr.SetClose()
-	fr.SetStatus(StatusNone)
+	fr.SetStatus(status)
 	fr.SetFin()
 
 	// reply back
