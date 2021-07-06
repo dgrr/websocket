@@ -194,6 +194,12 @@ func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 			})
 
 			ctx.Hijack(func(c net.Conn) {
+				if nc, ok := c.(interface {
+					UnsafeConn() net.Conn
+				}); ok {
+					c = nc.UnsafeConn()
+				}
+
 				conn := acquireConn(c)
 				conn.id = atomic.AddUint64(&s.nextID, 1)
 				// establishing default options

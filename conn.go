@@ -14,6 +14,7 @@ import (
 // This handler is compatible with io.Writer.
 type Conn struct {
 	c  net.Conn
+	br *bufio.Reader
 	bw *bufio.Writer
 
 	input  chan *Frame
@@ -92,6 +93,7 @@ func (c *Conn) reset(conn net.Conn) {
 	c.MaxPayloadSize = DefaultPayloadSize
 	c.userValues = make(map[string]interface{})
 	c.c = conn
+	c.br = bufio.NewReader(conn)
 	c.bw = bufio.NewWriter(conn)
 }
 
@@ -105,7 +107,7 @@ func (c *Conn) readLoop() {
 		// if c.ReadTimeout != 0 {
 		// }
 
-		_, err := fr.ReadFrom(c.c)
+		_, err := fr.ReadFrom(c.br)
 		if err != nil {
 			select {
 			case c.errch <- closeError{err: err}:
