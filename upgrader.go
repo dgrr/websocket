@@ -5,14 +5,19 @@ import (
 	b64 "encoding/base64"
 	"github.com/valyala/fasthttp"
 	"hash"
+	"net/http"
 	"sync"
 )
 
 type (
 	// RequestHandler is the websocket connection handler.
 	RequestHandler func(conn *Conn)
-	// UpgradeHandler is the upgrading handler.
+	// UpgradeHandler is a middleware callback that determines whether the
+	// WebSocket connection should be upgraded or not. If UpgradeHandler returns false,
+	// the connection is not upgraded.
 	UpgradeHandler func(*fasthttp.RequestCtx) bool
+	// UpgradeNetHandler is like UpgradeHandler but for net/http.
+	UpgradeNetHandler func(resp http.ResponseWriter, req *http.Request) bool
 )
 
 func prepareOrigin(b []byte, uri *fasthttp.URI) []byte {

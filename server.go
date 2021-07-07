@@ -2,7 +2,10 @@ package websocket
 
 import (
 	"bytes"
+	"io"
 	"net"
+	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -35,11 +38,15 @@ type (
 //
 // Server is going to be in charge of upgrading the connection, is not a server per-se.
 type Server struct {
-	// UpgradeHandler allows user to handle RequestCtx when upgrading.
+	// UpgradeHandler allows the user to handle RequestCtx when upgrading for fasthttp.
 	//
-	// If UpgradeHandler returns false the connection won't be upgraded and
-	// the parsed ctx will be used as a response.
+	// If UpgradeHandler returns false the connection won't be upgraded.
 	UpgradeHandler UpgradeHandler
+
+	// UpgradeHandler allows the user to handle the request when upgrading for net/http.
+	//
+	// If UpgradeNetHandler returns false, the connection won't be upgraded.
+	UpgradeNetHandler UpgradeNetHandler
 
 	// Protocols are the supported protocols.
 	Protocols []string
@@ -132,6 +139,7 @@ func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 			bytePool.Put(b)
 			return
 		}
+
 		bytePool.Put(b)
 	}
 
@@ -211,6 +219,127 @@ func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 
 				s.serveConn(conn)
 			})
+		}
+	}
+}
+
+// NetUpgrade upgrades the websocket connection for net/http.
+func (s *Server) NetUpgrade(resp http.ResponseWriter, req *http.Request) {
+	if req.Method != "GET" {
+		resp.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	rs := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(rs)
+
+	s.once.Do(s.initServer)
+
+	// Checking Origin header if needed
+	origin := req.Header.Get("Origin")
+	if s.Origin != "" {
+		uri := fasthttp.AcquireURI()
+		uri.Update(s.Origin)
+
+		b := bytePool.Get().([]byte)
+		b = prepareOrigin(b, uri)
+		fasthttp.ReleaseURI(uri)
+
+		if !equalsFold(b, s2b(origin)) {
+			resp.WriteHeader(http.StatusForbidden)
+			bytePool.Put(b)
+			return
+		}
+
+		bytePool.Put(b)
+	}
+
+	// Normalizing must be disabled because of WebSocket header fields.
+	// (This is not a fasthttp bug).
+	rs.Header.DisableNormalizing()
+
+	hasUpgrade := func() bool {
+		for _, v := range req.Header["Connection"] {
+			if strings.Contains(v, "Upgrade") {
+				return true
+			}
+		}
+		return false
+	}()
+
+	// Connection.Value == Upgrade
+	if hasUpgrade {
+		// Peek sade header field.
+		hup := req.Header.Get("Upgrade")
+		// Compare with websocket string defined by the RFC
+		if equalsFold(s2b(hup), websocketString) {
+			// Checking websocket version
+			hversion := req.Header.Get(b2s(wsHeaderVersion))
+			// Peeking websocket key.
+			hkey := req.Header.Get(b2s(wsHeaderKey))
+			hprotos := bytes.Split( // TODO: Reduce allocations. Do not split. Use IndexByte
+				s2b(req.Header.Get(b2s(wsHeaderProtocol))), commaString,
+			)
+			supported := false
+			// Checking versions
+			for i := range supportedVersions {
+				if bytes.Contains(supportedVersions[i], s2b(hversion)) {
+					supported = true
+					break
+				}
+			}
+			if !supported {
+				resp.WriteHeader(http.StatusBadRequest)
+				io.WriteString(resp, "Versions not supported")
+				return
+			}
+
+			if s.UpgradeNetHandler != nil {
+				if !s.UpgradeNetHandler(resp, req) {
+					return
+				}
+			}
+			// TODO: compression
+
+			h, ok := resp.(http.Hijacker)
+			if !ok {
+				resp.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			c, _, err := h.Hijack()
+			if err != nil {
+				io.WriteString(resp, err.Error())
+				return
+			}
+
+			// Setting response headers
+			rs.SetStatusCode(fasthttp.StatusSwitchingProtocols)
+			rs.Header.AddBytesKV(connectionString, upgradeString)
+			rs.Header.AddBytesKV(upgradeString, websocketString)
+			rs.Header.AddBytesKV(wsHeaderAccept, makeKey(s2b(hkey), s2b(hkey)))
+			// TODO: implement bad websocket version
+			// https://tools.ietf.org/html/rfc6455#section-4.4
+			if proto := selectProtocol(hprotos, s.Protocols); proto != "" {
+				rs.Header.AddBytesK(wsHeaderProtocol, proto)
+			}
+
+			_, err = rs.WriteTo(c)
+			if err != nil {
+				c.Close()
+				return
+			}
+
+			go func() {
+				conn := acquireConn(c)
+				conn.id = atomic.AddUint64(&s.nextID, 1)
+
+				if s.openHandler != nil {
+					s.openHandler(conn)
+				}
+
+				s.serveConn(conn)
+			}()
 		}
 	}
 }
