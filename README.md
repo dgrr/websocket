@@ -131,7 +131,8 @@ Pings are handle automatically by the library, but you can get the content of
 those pings setting the callback using [HandlePing](https://pkg.go.dev/github.com/dgrr/websocket?utm_source=godoc#Server.HandlePing).
 
 For example, let's try to get the round trip time to a client by using
-the PING frame.
+the PING frame. The website [http2.gofiber.io](https://http2.gofiber.io)
+uses this method to measure the round trip time displayed at the bottom of the webpage.
 
 ```go
 package main
