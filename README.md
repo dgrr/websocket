@@ -1,6 +1,6 @@
 # websocket
 
-WebSocket library for [fasthttp](https://github.com/valyala/fasthttp).
+WebSocket library for [fasthttp](https://github.com/valyala/fasthttp) and [net/http](https://pkg.go.dev/net/http).
 
 Checkout [examples](https://github.com/dgrr/websocket/blob/master/examples) to inspire yourself.
 
@@ -118,6 +118,31 @@ func main() {
 	ws.HandleData(OnMessage)
 	
 	fasthttp.ListenAndServe(":8080", ws.Upgrade)
+}
+
+func OnMessage(c *websocket.Conn, isBinary bool, data []byte) {
+	fmt.Printf("Received data from %s: %s\n", c.RemoteAddr(), data)
+}
+```
+
+## How can I launch a server if I use net/http?
+
+```go
+package main
+
+import (
+	"fmt"
+	"net/http"
+	
+	"github.com/dgrr/websocket"
+)
+
+func main() {
+	ws := websocket.Server{}
+	ws.HandleData(OnMessage)
+	
+	http.HandleFunc("/", ws.NetUpgrade)
+	http.ListenAndServe(":8080", nil)
 }
 
 func OnMessage(c *websocket.Conn, isBinary bool, data []byte) {
