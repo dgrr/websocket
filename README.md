@@ -131,7 +131,8 @@ Pings are handle automatically by the library, but you can get the content of
 those pings setting the callback using [HandlePing](https://pkg.go.dev/github.com/dgrr/websocket?utm_source=godoc#Server.HandlePing).
 
 For example, let's try to get the round trip time to a client by using
-the PING frame.
+the PING frame. The website [http2.gofiber.io](https://http2.gofiber.io)
+uses this method to measure the round trip time displayed at the bottom of the webpage.
 
 ```go
 package main
@@ -223,7 +224,7 @@ func OnPong(c *websocket.Conn, data []byte) {
 | Get the type of a received data message | Yes            | Yes          | Yes             | Yes          |
 | Compression Extensions                  | No             | Experimental | Yes             | No (?)       |
 | Read message using io.Reader            | No             | Yes          | No              | No (?)       |
-| Write message using io.WriteCloser      | No             | Yes          | No              | No (?)       |
+| Write message using io.WriteCloser      | Yes            | Yes          | No              | No (?)       |
 
 # Stress tests
 
