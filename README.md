@@ -223,7 +223,7 @@ func OnPong(c *websocket.Conn, data []byte) {
 | Get the type of a received data message | Yes            | Yes          | Yes             | Yes          |
 | Compression Extensions                  | No             | Experimental | Yes             | No (?)       |
 | Read message using io.Reader            | No             | Yes          | No              | No (?)       |
-| Write message using io.WriteCloser      | No             | Yes          | No              | No (?)       |
+| Write message using io.WriteCloser      | Yes            | Yes          | No              | No (?)       |
 
 # Stress tests
 
