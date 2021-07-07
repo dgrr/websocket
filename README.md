@@ -257,7 +257,7 @@ The following stress test were performed without timeouts:
 
 Executing `tcpkali --ws -c 100 -m 'hello world!!13212312!' -r 10k localhost:8081` the tests shows the following:
 
-Websocket:
+### Websocket:
 ```
 Total data sent:     267.7 MiB (280678466 bytes)
 Total data received: 229.5 MiB (240626600 bytes)
@@ -267,7 +267,20 @@ Packet rate estimate: 247050.1↓, 61842.9↑ (1↓, 1↑ TCP MSS/op)
 Test duration: 10.0075 s.
 ```
 
-Gorilla:
+### Websocket for net/http:
+```
+Total data sent:     267.3 MiB (280320124 bytes)
+Total data received: 228.3 MiB (239396374 bytes)
+Bandwidth per channel: 4.156⇅ Mbps (519.5 kBps)
+Aggregate bandwidth: 191.442↓, 224.168↑ Mbps
+Packet rate estimate: 188107.1↓, 52240.7↑ (1↓, 1↑ TCP MSS/op)
+Test duration: 10.0039 s.
+```
+
+Either for fasthttp and net/http should be quite close,
+the only difference is the way they both upgrade.
+
+### Gorilla:
 ```
 Total data sent:     260.2 MiB (272886768 bytes)
 Total data received: 109.3 MiB (114632982 bytes)
@@ -277,7 +290,7 @@ Packet rate estimate: 109755.3↓, 66807.4↑ (1↓, 1↑ TCP MSS/op)
 Test duration: 10.01 s.
 ```
 
-Nhooyr: (Don't know why is that low)
+### Nhooyr: (Don't know why is that low)
 ```
 Total data sent:     224.3 MiB (235184096 bytes)
 Total data received: 41.2 MiB (43209780 bytes)
@@ -287,7 +300,7 @@ Packet rate estimate: 88474.0↓, 55256.1↑ (1↓, 1↑ TCP MSS/op)
 Test duration: 10.0027 s.
 ```
 
-Gobwas:
+### Gobwas:
 ```
 Total data sent:     265.8 MiB (278718160 bytes)
 Total data received: 117.8 MiB (123548959 bytes)
