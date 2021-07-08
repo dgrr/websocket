@@ -281,7 +281,7 @@ func (fr *Frame) MaskKey() []byte {
 
 // Payload returns the frame payload.
 func (fr *Frame) Payload() []byte {
-	if fr.IsClose() {
+	if fr.IsClose() && len(fr.b) != 0 {
 		return fr.b[2:]
 	}
 
@@ -470,6 +470,10 @@ func (fr *Frame) WriteTo(wr io.Writer) (n int64, err error) {
 
 // Status returns StatusCode.
 func (fr *Frame) Status() (status StatusCode) {
+	if len(fr.b) < 2 {
+		return StatusNone
+	}
+
 	u := binary.BigEndian.Uint16(fr.b[:2])
 
 	status = StatusCode(u)
