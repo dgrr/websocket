@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net"
 	"net/http"
@@ -196,9 +197,9 @@ func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 				ctx.Response.Header.AddBytesK(wsHeaderProtocol, proto)
 			}
 
-			userValues := make(map[string]interface{})
+			var nctx context.Context
 			ctx.VisitUserValues(func(k []byte, v interface{}) {
-				userValues[string(k)] = v
+				nctx = context.WithValue(nctx, string(k), v)
 			})
 
 			ctx.Hijack(func(c net.Conn) {
@@ -211,7 +212,7 @@ func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 				conn := acquireConn(c)
 				conn.id = atomic.AddUint64(&s.nextID, 1)
 				// establishing default options
-				conn.userValues = userValues
+				conn.ctx = nctx
 
 				if s.openHandler != nil {
 					s.openHandler(conn)
@@ -330,16 +331,17 @@ func (s *Server) NetUpgrade(resp http.ResponseWriter, req *http.Request) {
 				return
 			}
 
-			go func() {
+			go func(ctx context.Context) {
 				conn := acquireConn(c)
 				conn.id = atomic.AddUint64(&s.nextID, 1)
+				conn.ctx = ctx
 
 				if s.openHandler != nil {
 					s.openHandler(conn)
 				}
 
 				s.serveConn(conn)
-			}()
+			}(req.Context())
 		}
 	}
 }

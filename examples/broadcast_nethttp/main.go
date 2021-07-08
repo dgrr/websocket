@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"sync"
 	"time"
-	"net/http"
 
 	"github.com/dgrr/websocket"
 )

@@ -2,11 +2,13 @@ package websocket
 
 import (
 	"bufio"
-	"github.com/valyala/bytebufferpool"
+	"context"
 	"io"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/valyala/bytebufferpool"
 )
 
 // Conn represents a WebSocket connection on the server side.
@@ -40,7 +42,7 @@ type Conn struct {
 
 	wg sync.WaitGroup
 
-	userValues map[string]interface{}
+	ctx context.Context
 }
 
 // ID returns a unique identifier for the connection.
@@ -50,12 +52,12 @@ func (c *Conn) ID() uint64 {
 
 // UserValue returns the key associated value.
 func (c *Conn) UserValue(key string) interface{} {
-	return c.userValues[key]
+	return c.ctx.Value(key)
 }
 
 // SetUserValue assigns a key to the given value
 func (c *Conn) SetUserValue(key string, value interface{}) {
-	c.userValues[key] = value
+	c.ctx = context.WithValue(c.ctx, key, value)
 }
 
 // LocalAddr returns local address.
@@ -91,7 +93,7 @@ func (c *Conn) reset(conn net.Conn) {
 	c.ReadTimeout = 0
 	c.WriteTimeout = 0
 	c.MaxPayloadSize = DefaultPayloadSize
-	c.userValues = make(map[string]interface{})
+	c.ctx = nil
 	c.c = conn
 	c.br = bufio.NewReader(conn)
 	c.bw = bufio.NewWriter(conn)
