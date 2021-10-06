@@ -197,7 +197,7 @@ func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 				ctx.Response.Header.AddBytesK(wsHeaderProtocol, proto)
 			}
 
-			var nctx context.Context
+			nctx := context.Background()
 			ctx.VisitUserValues(func(k []byte, v interface{}) {
 				nctx = context.WithValue(nctx, string(k), v)
 			})
