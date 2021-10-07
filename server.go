@@ -183,7 +183,7 @@ func (s *Server) Upgrade(ctx *fasthttp.RequestCtx) {
 				}
 			}
 			// TODO: compression
-			//compress := mustCompress(exts)
+			// compress := mustCompress(exts)
 
 			// Setting response headers
 			ctx.Response.SetStatusCode(fasthttp.StatusSwitchingProtocols)
@@ -355,6 +355,10 @@ loop:
 		case fr := <-c.input:
 			s.frHandler(c, fr)
 		case err := <-c.errch:
+			if err == nil {
+				break loop
+			}
+
 			if ce, ok := err.(closeError); ok {
 				closeErr = ce.err
 				break loop
@@ -458,6 +462,7 @@ func (s *Server) handlePong(c *Conn, data []byte) {
 }
 
 func (s *Server) handleClose(c *Conn, fr *Frame) {
+	defer close(c.closer)
 	c.errch <- func() error {
 		if fr.Status() != StatusNone {
 			return Error{
