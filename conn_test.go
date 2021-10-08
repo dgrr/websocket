@@ -3,10 +3,11 @@ package websocket
 import (
 	"bufio"
 	"fmt"
-	"github.com/valyala/fasthttp"
-	"github.com/valyala/fasthttp/fasthttputil"
 	"io"
 	"testing"
+
+	"github.com/valyala/fasthttp"
+	"github.com/valyala/fasthttp/fasthttputil"
 )
 
 func configureServer(t *testing.T) (*fasthttp.Server, *fasthttputil.InmemoryListener) {
@@ -14,7 +15,7 @@ func configureServer(t *testing.T) (*fasthttp.Server, *fasthttputil.InmemoryList
 
 	ws := Server{}
 
-	var stage = 0
+	stage := 0
 
 	ws.HandleData(func(c *Conn, isBinary bool, data []byte) {
 		switch stage {
@@ -154,8 +155,8 @@ func TestReadFrame(t *testing.T) {
 
 	fr.Reset()
 	_, err = conn.ReadFrame(fr)
-	if !fr.IsClose() {
-		t.Fatal("Unexpected frame close")
+	if !fr.IsContinuation() {
+		t.Fatalf("Unexpected frame %s", fr.Code())
 	}
 
 	ln.Close()
