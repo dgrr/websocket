@@ -18,8 +18,8 @@ func BenchmarkRandKey(b *testing.B) {
 }
 
 func TestDial(t *testing.T) {
-	var text = []byte("Make fasthttp great again")
-	var uri = "http://localhost:9843/"
+	text := []byte("Make fasthttp great again")
+	uri := "http://localhost:9843/"
 	ln := fasthttputil.NewInmemoryListener()
 
 	ws := Server{
@@ -33,11 +33,7 @@ func TestDial(t *testing.T) {
 	})
 
 	ws.HandleClose(func(c *Conn, err error) {
-		if err == nil {
-			t.Fatal("Expected err")
-		}
-
-		if err.(Error).Status != StatusGoAway {
+		if err != nil && err.(Error).Status != StatusGoAway {
 			t.Fatalf("Expected GoAway, got %s", err.(Error).Status)
 		}
 	})
