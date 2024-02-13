@@ -462,7 +462,7 @@ func (s *Server) handlePong(c *Conn, data []byte) {
 }
 
 func (s *Server) handleClose(c *Conn, fr *Frame) {
-	defer close(c.closer)
+	defer c.closeOnce.Do(func() { close(c.closer) })
 	c.errch <- func() error {
 		if fr.Status() != StatusNone {
 			return Error{
