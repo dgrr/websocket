@@ -21,8 +21,11 @@ type Conn struct {
 
 	input  chan *Frame
 	output chan *Frame
-	closer chan struct{}
-	errch  chan error
+
+	closer    chan struct{}
+	closeOnce sync.Once
+
+	errch chan error
 
 	// buffered messages
 	buffered *bytebufferpool.ByteBuffer
@@ -242,7 +245,7 @@ func (c *Conn) CloseDetail(status StatusCode, reason string) {
 
 		c.WriteFrame(fr)
 
-		close(c.closer)
+		c.closeOnce.Do(func() { close(c.closer) })
 	}
 
 	return
